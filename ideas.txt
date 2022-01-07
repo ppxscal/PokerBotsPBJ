@@ -1,0 +1,51 @@
+Deck objects provide sample, shuffle, deal and peek methods. The deck code is currently 
+implemented in pure python and works well for quick lightweight simulations, 
+but is too slow for full range vs. range equity calculations. Ideally this code will be rewritten in Cython.
+
+Machine learning avenue is hard but doable. 
+
+Nash Equilibrium - A strategy Guarenteed to not lose in expectation. So we make each action with an expected return of 0, 
+but here we minimize our risk, while capitalizing off the oponents mistake
+
+When we find ourselves in a paticular subgame, we should use information on 
+previous subgames to help us out - also reduces computational load
+
+Nested Subgame Solving
+
+for the first two rounds we implement a basic strategy
+
+After the second round we apply nested subgame Solving strategy
+
+
+"Nevertheless, we can approximate a good strategy in the subgame that is 
+reached if we have a good estimate of the value of reaching the subgame in an equilibrium."
+
+
+The card abstraction algorithm was similar to that used in Baby Tartanian8 [Brown and Sandholm, 2016a] (the winner of the 2016 ACPC) and Tartanian7 
+[Brown et al., 2015] (the winner of the 2014 ACPC). The abstraction algorithm took the game size from 10161 decision points down to 1012.
+
+Unsafe Subgame Solving:
+
+Estimate opponents strategy - generate belief distribution - Bayes Rule(R)
+
+But the opponents strategy can adapt
+
+Reach subgame Solving:
+
+Can't look at expected values of the blueprint strategy
+We must look at the expected values of whatever subgame we would 
+have been in bc we don't even know where we are after a certain point 
+
+
+
+I would lean towards this strategy over building a neural network because the latter is 
+usually very computationally intensive which would be detrimental to our performance in a tournament. 
+
+
+It's guaranteed that for any two player imperfect information game (like Heads Up No Limit Texas Holdem) 
+there exists at least one Nash Equilibrium strategy, and if you play by it, you cannot lose in the long run.
+ In real life though, if you play a Nash Equilibrium strategy in poker, you will destroy your opponents since 
+ chances are they aren't playing anything close to an optimal strategy.
+
+
+
