@@ -12,7 +12,7 @@ import time
 import random
 import eval7
 
-
+# Jackson's comment
 class Player(Bot):
     """
     A pokerbot.
