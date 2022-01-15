@@ -7,12 +7,13 @@ from skeleton.states import NUM_ROUNDS, STARTING_STACK, BIG_BLIND, SMALL_BLIND
 from skeleton.bot import Bot
 from skeleton.runner import parse_args, run_bot
 import pyximport
-from monteCarlo import calc_strength
 import time
 import random
 import eval7
 
 # Jackson's comment
+
+
 class Player(Bot):
     """
     A pokerbot.
@@ -28,6 +29,53 @@ class Player(Bot):
         Returns:
         Nothing.
         """
+
+    def calc_strength(self, hole, iters):
+        """
+        A Monte carlo method that estimates the win probability of a pair of hole cards 
+
+        Args:
+        hole: list of 2 hole cards 
+        iters: number of times the sim is run
+        """
+
+        deck = eval7.Deck()  # deck of cards
+        hole_cards = [eval7.Card(card) for card in hole]  # list of our hole cards
+
+        for card in hole_cards:
+            deck.cards.remove(card)
+
+        score = 0
+
+        for _ in range(iters):
+            deck.shuffle()
+
+            _COMM = 5
+            _OPP = 2
+
+            draw = deck.peek(_COMM + _OPP)
+
+            opp_hole = draw[:_OPP]
+            community = draw[_OPP:]
+
+            our_hand = hole_cards + community
+            opp_hand = opp_hole + community
+
+            our_hand_value = eval7.evaluate(our_hand)
+            opp_hand_value = eval7.evaluate(opp_hand)
+
+            if our_hand_value > opp_hand_value:
+                score += 2
+
+            if our_hand_value == opp_hand_value:
+                score += 1
+
+            else:
+                score += 0
+
+        hand_strength = score / (2 * iters)
+
+        return hand_strength
 
     def handle_new_round(self, game_state, round_state, active):
         """
@@ -145,7 +193,7 @@ class Player(Bot):
             temp_action = FoldAction()
 
         _MONTE_CARLO_ITERS = 1000
-        strength = calc_strength(my_cards, _MONTE_CARLO_ITERS)
+        strength = self.calc_strength(my_cards, _MONTE_CARLO_ITERS)
         # the strength variable is our main focus as everything else is mathematically
         # sound - unless we can directly compute the probability of winning but it seems
         # very hard - more research
