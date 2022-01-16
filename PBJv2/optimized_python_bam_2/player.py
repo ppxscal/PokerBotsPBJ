@@ -170,7 +170,7 @@ class Player(Bot):
 
             # self.scaryOffset =  max([0, self.scaryOffset - 0.01])
 
-        print("preflopvar, postflopvar, scaryoffset", self.raisePreFlopVar, self.raisePostFlopVar, self.scaryOffset)
+        # print("preflopvar, postflopvar, scaryoffset", self.raisePreFlopVar, self.raisePostFlopVar, self.scaryOffset)
     
 
     def get_action(self, game_state, round_state, active):
