@@ -191,7 +191,7 @@ class Player(Bot):
         else:
             temp_action = FoldAction()
 
-        _MONTE_CARLO_ITERS = 1000
+        _MONTE_CARLO_ITERS = 100 
         strength = self.calc_strength(my_cards, _MONTE_CARLO_ITERS)
 
         if continue_cost > 0:
