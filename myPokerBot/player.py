@@ -192,7 +192,7 @@ class Player(Bot):
         else:
             temp_action = FoldAction()
 
-        _MONTE_CARLO_ITERS = 1000
+        _MONTE_CARLO_ITERS = 101
         strength = self.calc_strength(my_cards, _MONTE_CARLO_ITERS)
         # the strength variable is our main focus as everything else is mathematically
         # sound - unless we can directly compute the probability of winning but it seems

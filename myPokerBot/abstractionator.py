@@ -12,7 +12,8 @@ import eval7
 import abc
 import numpy as np
 import math
-
+import pickle
+from collections import defaultdict
 
 def calc_strength(hand, iters, opp, comm):
     """ 
@@ -34,26 +35,51 @@ def calc_strength(hand, iters, opp, comm):
 
     score = 0
     community = []
-    #adds the community cards to the opponents hand as well
+    # adds the community cards to the opponents hand as well
 
     if comm < 5:
-        for i in range(5- comm):
+        for i in range(5 - comm):
             community.append(hand[2 + i])
-    
 
     for _ in range(iters):  # MC the probability of winning
         deck.shuffle()
 
         # number of cards in community + opponent
 
-        draw = deck.peek(opp + comm)
+        draw = deck.peek(opp + comm + 4)
+
+        # we add 4 cards to implement swap
 
         # look at the next seven cards in an arbitrary deck
 
         opphand = draw[:opp]
-        communityReveal= draw[comm:]
+        communityReveal = draw[opp:opp+comm]
+        '''
+        Deck objects provide sample, shuffle, deal and peek methods. 
+        The deck code is currently implemented in pure python and works well for 
+        quick lightweight simulations, but is too slow for full range vs. 
+        range equity calculations. Ideally this code will be rewritten in Cython.
+        '''        
+        if (5<= comm <= 6):
+            swap = random.random()
+            if ((0 < swap < .1) and comm == 5):
+                swapHand = draw[opp+comm:]
+                hand[0] = swapHand[0]
+                hand[1] = swapHand[1]
+                opphand[0] = swapHand[2]
+                opphand[1] = swapHand[3]
 
-        #simulates the reveal of the remaining cards
+            elif((0 < swap < .05) and comm == 6):
+                swapHand = draw[opp+comm:]
+                hand[0] = swapHand[0]
+                hand[1] = swapHand[1]
+                opphand[0] = swapHand[2]
+                opphand[1] = swapHand[3]
+
+
+        # simulates the reveal of the remaining cards
+        # flop 10% chance of each players hole cards switched from one from the deck
+        #turn 5% chance
 
         our_hand = hand + communityReveal
         opp_hand = opphand + community + communityReveal
@@ -70,17 +96,17 @@ def calc_strength(hand, iters, opp, comm):
 
     hand_strength = score / (2 * iters)  # win probability
 
-    print("--- %s seconds ---" % (time.time() - startTime))
-
     return hand_strength
 
 
 # use equity distrubution and earths movers distance to group cards together for flopandturn
 
 
-def computeEquityDistribution(preflop, flop=None, turn=None):
+def computeEquityDistribution(iterations, numHands, preflop, flop=None, turn=None):
 
-    #the inputs are just the arrays of cards in eval7 format for each round
+    # the inputs are just the arrays of cards in eval7 format for each round
+
+    startTime = time.time()
 
     deck = eval7.Deck()
 
@@ -107,18 +133,20 @@ def computeEquityDistribution(preflop, flop=None, turn=None):
 
     # we can go back and change the numbers if we need to
 
-    for _ in range(100):  
+    for _ in range(iterations):
 
-       equity = calc_strength(hand, 50, opp, comm)
+        # I suspect that combinatorically evaluating all possible hands may produce more accurate results - TODO
+        # too much computation
 
-       equityDistribution[math.floor(equity * 100) - 1] += 1
+        equity = calc_strength(hand, numHands, opp, comm)
 
-    for equity in equityDistribution:
+        equityDistribution[math.floor(equity * 100) - 1] += 1
 
-        equity /= 100
-    
-    return equityDistribution 
+    equityDistribution /= iterations
 
+    #print("--- %s seconds ---" % (time.time() - startTime))
+
+    return equityDistribution
 
 
 class PreflopAbstraction:
@@ -160,6 +188,31 @@ class flopTurnAbstraction:
         pass
 
 
+class riverAbstraction:
+    """
+    we can compare hands at all states using equity distribution I would argue that seperate classes arent really needed
+    all we need to do from here is create a lookup table - where the program given a hand, would find the closest equity dis
+    tribution via earth mover's distance. We can assign each unique distribution an index, for which the cfr algorithm will 
+    distinguish between hands. Example: at a node, we have a equity distribution index that represents a hands clostest expected outcome. 
+    from there we find a node with the same index and action history, for which we will choose the next action of least regret. We can work
+    on the details later.
+
+    The lookup table must distinguish between game states. For example if we're at the flop round, we access the lookup tabe
+    to find equity distributions for that specific round. We find the closest one, and return the index of that distribution. However, we need to make sure
+    that the distribution is detailed enough to be accurate, but not too detailed such that the program spends too much time looking up 
+    equity distributions. 
+
+    Ive calculated that it would take 15 years to make the lookup table. It is a largely from calculating all possible hands stemming from the flop round.
+
+    I can try reducing the time the algorithm takes
+
+
+
+
+    pass
+    """
+
+
 """
 deck = eval7.Deck()
 
@@ -175,11 +228,93 @@ print(abstractor.hash)
 print(bstractor.hash)
 """
 
-deck = eval7.Deck()
+#with these parameters it should take a little more than 24 hours to create the lookup table for all
+#possible hands
 
-hand = [eval7.Card("Ks"), eval7.Card("Kd"), eval7.Card("Kc"), eval7.Card("Kh"), ]
+# It takes about a day sing an abstraction for all possible hands after the flop. Must use a precomputed strategy preflop. 
+
+'''
+ed = computeEquityDistribution(
+        300,
+        100,
+        [eval7.Card("Ks"), eval7.Card("7d")],
+        [eval7.Card("8h"), eval7.Card("9c"), eval7.Card("8s")],
+    )
+
+print(
+    ed
+)
+'''
 
 
-print(computeEquityDistribution([eval7.Card("Ks"), eval7.Card("Kd")]), )
+def makeLookupTable(startingHands, hands, handDepth, hole, flop, turn=False, river=False):
+
+    #rank suit
+    #start with after_flop make sure to implement the swtiching today.
+
+
+    #toStringDeck = [x.__str__() for x in deck]
+
+    # we are trying to make an equity distribution for every possible hand after the flop
+
+    #TODO edit equitydistribution method to include river round possibility
+
+    #For every combination of hand after flop, add the equity distribution for that hand to the lookup table. We can worry about trimming it after we have to code to make
+    #the table in the first place
+
+    lookupTable = defaultdict(list)
+
+    t0 = time.time()
+
+    for i in range(0,startingHands):
+
+        #if i == 6:
+            #print(hole + flop)
+            #print(hash(frozenset(hole + flop)))
+
+        deck = eval7.Deck()
+        deck.shuffle()
+
+        hole = deck.deal(2)
+        flop = deck.deal(3)
+
+        lookupTable[hash(frozenset(hole + flop))].append(computeEquityDistribution(
+        300,
+        100,
+        hole,
+        flop,))
+
+        print("Dataset Construction - Fraction Complete : " + str(i/startingHands) + "th" + "  Time Elapsed: "+ str(time.time() - t0)+"s")
+
+
+    return lookupTable
+
+
+#dic = makeLookupTable(200000, 300, 100, True, True)
+
+#with open('flopLookupV2.pickle', 'wb') as handle:
+    pickle.dump(dic, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+'''
+with open('flopLookup.pickle', 'rb') as handle:
+    a = pickle.load(handle)
+
+for i in a.values():
+    print(i[0])
+    plt.plot(i[0])
+    plt.show()
+
+
+[Card("9c"), Card("Jc"), Card("Ad"), Card("7h"), Card("2c"), Card("Ad"), Card("7h"), Card("2c")]
+3678833318650297864
+
+
+
+print(hash(frozenset([Card("9c"), Card("Jc"), Card("Ad"), Card("7h"), Card("2c"), Card("Ad"), Card("7h"), Card("2c")])))
+'''
+
+# i suspect it would makes greater sense to only apply the earth mover's distance to the 
+# turn and river rounds. The flop just creates too much uncertainty and too many conditions to check
+
 
 
