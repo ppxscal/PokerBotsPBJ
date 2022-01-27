@@ -9,6 +9,7 @@ from skeleton.runner import parse_args, run_bot
 
 import random 
 import eval7
+import pandas as pd
 
 
 class Player(Bot):
@@ -34,6 +35,12 @@ class Player(Bot):
         self.opp_prev_cards = []
         self.prev_end_round = 5
         self.scaryOffset = 0
+
+        #make sure this df isn't too big!! Loading data all at once might be slow if you did more computations!
+        calculated_df = pd.read_csv('hole_strengths.csv') #the values we computed offline, this df is slow to search through though
+        holes = calculated_df.Holes #the columns of our spreadsheet
+        strengths = calculated_df.Strengths
+        self.starting_strengths = dict(zip(holes, strengths)) #convert to a dictionary, O(1) lookup time!
         
     def calc_strength(self, hole, iters, community = []):
         ''' 
@@ -223,7 +230,10 @@ class Player(Bot):
         
         #running monte carlo simulation when we have community cards vs when we don't 
         if street <3:
-            strength = self.calc_strength(my_cards, _MONTE_CARLO_ITERS)
+            # strength = self.calc_strength(my_cards, _MONTE_CARLO_ITERS)
+            # look up strength from precomputed hole cards
+            key = self.hole_list_to_key(my_cards)
+            strength = self.starting_strengths[key]
         else:
             strength = self.calc_strength(my_cards, _MONTE_CARLO_ITERS, board_cards)
 
@@ -273,6 +283,47 @@ class Player(Bot):
 
         return my_action
         
+
+    def hole_list_to_key(self, hole):
+                '''
+                Converts a hole card list into a key that we can use to query our 
+                strength dictionary
+                hole: list - A list of two card strings in the engine's format (Kd, As, Th, 7d, etc.)
+                '''
+                card_1 = hole[0] #get all of our relevant info
+                card_2 = hole[1]
+
+                rank_1, suit_1 = card_1[0], card_1[1] #card info
+                rank_2, suit_2 = card_2[0], card_2[1]
+
+                numeric_1, numeric_2 = self.rank_to_numeric(rank_1), self.rank_to_numeric(rank_2) #make numeric
+
+                suited = suit_1 == suit_2 #off-suit or not
+                suit_string = 's' if suited else 'o'
+
+                if numeric_1 >= numeric_2: #keep our hole cards in rank order
+                    return rank_1 + rank_2 + suit_string
+                else:
+                    return rank_2 + rank_1 + suit_string
+        
+    def rank_to_numeric(self, rank):
+        '''
+        Method that converts our given rank as a string
+        into an integer ranking
+        rank: str - one of 'A, K, Q, J, T, 9, 8, 7, 6, 5, 4, 3, 2'
+        '''
+        if rank.isnumeric(): #2-9, we can just use the int version of this string
+            return int(rank)
+        elif rank == 'T': #10 is T, so we need to specify it here
+            return 10
+        elif rank == 'J': #Face cards for the rest of them
+            return 11
+        elif rank == 'Q':
+            return 12
+        elif rank == 'K':
+            return 13
+        else: #Ace (A) is the only one left, give it the highest rank
+            return 14
 
 
 if __name__ == '__main__':

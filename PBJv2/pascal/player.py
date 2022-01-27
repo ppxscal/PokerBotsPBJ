@@ -1,14 +1,18 @@
 '''
-Simple example pokerbot, written in Python.
+PBJ Team Pokerbot
 '''
 from skeleton.actions import FoldAction, CallAction, CheckAction, RaiseAction
 from skeleton.states import GameState, TerminalState, RoundState
 from skeleton.states import NUM_ROUNDS, STARTING_STACK, BIG_BLIND, SMALL_BLIND
 from skeleton.bot import Bot
 from skeleton.runner import parse_args, run_bot
-
+import numpy as np
+from numpy import dot
+from numpy.linalg import norm
+from scipy import spatial
 import random 
 import eval7
+import collections
 
 
 class Player(Bot):
@@ -26,7 +30,7 @@ class Player(Bot):
         Returns:
         Nothing.
         '''
-
+        self.numRounds = 0
         self.myDelta = 0
         self.prevStrength = 0.5
         self.raisePreFlopVar = 0.4
@@ -34,6 +38,44 @@ class Player(Bot):
         self.opp_prev_cards = []
         self.prev_end_round = 5
         self.scaryOffset = 0
+        self.roundHistory= ([[] for i in range(1000)])
+        self.winsLoss = [0 for i in range (1000)]
+        self.roundActions = []
+    
+    def pastLookup(self, roundActions):
+
+        
+        cosVector = []
+        leng = len(roundActions)
+        counter = 0
+        minValue = 2
+        index = 0
+        for i in self.roundHistory:
+            if (not leng == 1) and leng == len(i):
+                cosangle = 1 - spatial.distance.cosine(i, roundActions)
+                cosVector.append(cosangle)
+                #print(cosangle)
+                if cosangle<minValue:
+                    minValue = cosangle
+                    index = counter
+            counter += 1
+
+        #if index == 0:
+        #    print("When index = 0" + "\n")
+        #    print(cosVector)
+
+        #index = cosVector.index()
+        
+        if not index == 0:
+
+            #print((self.roundHistory[index]))
+            return (self.winsLoss[index])
+            
+        
+        else:
+
+            return 0
+
         
     def calc_strength(self, hole, iters, community = []):
         ''' 
@@ -47,14 +89,16 @@ class Player(Bot):
 
         deck = eval7.Deck() # deck of cards
         hole_cards = [eval7.Card(card) for card in hole] # our hole cards in eval7 friendly format
-
         if community != []:
             community_cards = [eval7.Card(card) for card in community]
             for card in community_cards: #removing the current community cards from the deck
                 deck.cards.remove(card)
 
         for card in hole_cards: #removing our hole cards from the deck
-            deck.cards.remove(card)       
+            deck.cards.remove(card)
+        
+        #may need to fix this later 
+        
         
         score = 0 
 
@@ -68,6 +112,7 @@ class Player(Bot):
             
             opp_hole = draw[:_OPP]
             alt_community = draw[_OPP:]
+
             
             if community == []:
                 our_hand = hole_cards  + alt_community
@@ -76,6 +121,7 @@ class Player(Bot):
 
                 our_hand = hole_cards + community_cards + alt_community
                 opp_hand = opp_hole + community_cards + alt_community
+
 
             our_hand_value = eval7.evaluate(our_hand)
             opp_hand_value = eval7.evaluate(opp_hand)
@@ -129,6 +175,7 @@ class Player(Bot):
         Nothing.
         '''
 
+
         my_delta = terminal_state.deltas[active]  # your bankroll change from this round
         previous_state = terminal_state.previous_state  # RoundState before payoffs
         street = previous_state.street  # 0, 3, 4, or 5 representing when this round ended
@@ -156,11 +203,34 @@ class Player(Bot):
 
         else: # we won last turn, increase risk by raising more each time
             if street < 3:                 
-                self.raisePreFlopVar = min([0.6, self.raisePreFlopVar + 0.05])
+                self.raisePreFlopVar = min([0.8, self.raisePreFlopVar + 0.05])
+                
                 # print('update pre up')
             else:
                 self.raisePostFlopVar = min([0.8, self.raisePostFlopVar + 0.05])
+                
                 # print('update post up')
+
+        self.winsLoss[self.numRounds] = my_delta
+
+        #print(self.roundHistory[self.numRounds])
+        #print(self.winsLoss[self.numRounds])
+        #print("\n")
+        #
+        #print(self.roundActions)
+        #print('\n')
+        
+
+        #print(self.roundActions)
+
+        #self.roundHistory.append(np.array(self.roundActions))
+
+        self.roundActions = []
+
+        self.numRounds += 1
+
+        #if self.numRounds == 1000:
+            #print(self.roundHistory)
 
             # self.scaryOffset =  max([0, self.scaryOffset - 0.01])
 
@@ -194,17 +264,33 @@ class Player(Bot):
         opp_contribution = STARTING_STACK - opp_stack  # the number of chips your opponent has contributed to the pot
         net_upper_raise_bound = round_state.raise_bounds()
         stacks = [my_stack, opp_stack] #keep track of our stacks
-
         my_action = None
 
         min_raise, max_raise = round_state.raise_bounds()
         pot_total = my_contribution + opp_contribution
 
+        #add streetinfo
+
+        ind = 0
+
+        if street == 0:
+            pass
+        else:
+            ind = street - 2
+
+        
         # raise logic 
         if street <3: #preflop 
             raise_amount = int(my_pip + continue_cost + self.raisePreFlopVar*(pot_total + continue_cost))
         else: #postflop
             raise_amount = int(my_pip + continue_cost + self.raisePostFlopVar*(pot_total + continue_cost))
+
+        expectedBankroll = 0
+
+        if street == 3 and self.numRounds >= 500:
+            list = self.roundActions
+            expectedBankroll = self.pastLookup(list)
+            #print("Game "+ str(self.numRounds) + ": " +str(expectedBankroll))
 
         # ensure raises are legal
         raise_amount = max([min_raise, raise_amount])
@@ -219,13 +305,21 @@ class Player(Bot):
         else:
             temp_action = FoldAction() 
 
-        _MONTE_CARLO_ITERS = 100
+        _MONTE_CARLO_ITERS = 200
+    
         
         #running monte carlo simulation when we have community cards vs when we don't 
         if street <3:
             strength = self.calc_strength(my_cards, _MONTE_CARLO_ITERS)
         else:
             strength = self.calc_strength(my_cards, _MONTE_CARLO_ITERS, board_cards)
+            if street == 3:
+                self.roundActions = []
+                self.roundActions += [self.prevStrength, continue_cost, strength, my_pip, opp_pip, my_contribution, abs(net_upper_raise_bound[0] - net_upper_raise_bound[1])]
+
+                self.roundHistory[self.numRounds] = self.roundActions
+
+                #print(self.roundHistory[self.numRounds])
 
         self.prevStrength = strength
 
@@ -237,22 +331,23 @@ class Player(Bot):
             if street <3: # if opponent raised early, they are probably more confident
                 if continue_cost > 1: #continue cost == 1 is blind
                     if continue_cost/pot_total > 0.1:
-                        _SCARY = 0.15
+                        _SCARY = 0.1
                     if continue_cost/pot_total > 0.3: 
-                        _SCARY = 0.25
+                        _SCARY = 0.2
                     if continue_cost/pot_total > 0.5: 
-                        _SCARY = 0.35           
+                        _SCARY = 0.3           
             else: #post flop
                 if continue_cost/pot_total > 0.1:
                     _SCARY = 0.1
                 if continue_cost/pot_total > 0.3: 
                     _SCARY = 0.2
                 if continue_cost/pot_total > 0.5: 
-                    _SCARY = 0.3
+                    _SCARY = 0.35
 
             _SCARY += self.scaryOffset #this var is adjusted in the handle_round_over function
 
-            strength = max(0, strength - _SCARY)
+            strength = max(0, strength - _SCARY + (expectedBankroll * .10/ 200))
+
             pot_odds = continue_cost/(pot_total + continue_cost)
 
             if strength >= pot_odds: # nonnegative EV decision
